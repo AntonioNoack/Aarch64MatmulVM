@@ -9,6 +9,8 @@ This repository contains my own little VM, which emulates and displays the mecha
 - [19 x 4 x 4 Kernel](https://phychi.com/asm/aarch64/19x4x4.html)
 - [32 x 32 x 32 Kernel](https://phychi.com/asm/aarch64/32x32x32.html)
 
+https://user-images.githubusercontent.com/20659579/121016853-e96d1d80-c79c-11eb-924f-75714407fd69.mp4
+
 ## Execution of other matrix multiplication kernels
 
 1. clone one of the html files
