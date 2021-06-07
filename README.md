@@ -11,11 +11,11 @@ This repository contains my own little VM, which emulates and displays the mecha
 
 ## Execution of other matrix multiplication kernels
 
-- clone one of the html files
-- remove the assembly code from the "code" section and paste your own
-- change the data inside the "mkn" element to match your matrix dimensions
-- change the default delay in the element "delay", if the given value is too fast or slow for your liking
-- I only implemented what was necessary for my own kernels to run, so please see the next chapter
+1. clone one of the html files
+2. remove the assembly code from the "code" section and paste your own
+3. change the data inside the "mkn" element to match your matrix dimensions
+4. change the default delay in the element "delay", if the given value is too fast or slow for your liking
+I only implemented what was necessary for my own kernels to run, so please read the next chapter
 
 ## Limitations
 
