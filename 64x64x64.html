@@ -17,6 +17,11 @@ gemm_asm_sve_64_64_64:
 	
 	// rette die Register, die wir nutzen, die gerettet werden müssen
 	// wir verwenden nur x0-x4, da müssen wir also nichts retten
+	// dank Umbenennung ist es nicht mehr notwendig, die Vektorregister zu retten
+	// stp  d8,  d9, [sp, #-16]!
+	// stp d10, d11, [sp, #-16]!
+	// stp d12, d13, [sp, #-16]!
+	// stp d14, d15, [sp, #-16]!
 	
 	// setze p0 überall auf 1
 	ptrue p0.s
@@ -44,22 +49,22 @@ loop_n:
 		ldr  z7, [x2]
 		add x2,x2,#16*4
 		
-		ldr  z8, [x2]
+		ldr z20, [x2]
 		add x2,x2,#16*4
-		ldr  z9, [x2]
+		ldr z21, [x2]
 		add x2,x2,#16*4
-		ldr z10, [x2]
+		ldr z22, [x2]
 		add x2,x2,#16*4
-		ldr z11, [x2]
+		ldr z23, [x2]
 		add x2,x2,#16*4
 		
-		ldr z12, [x2]
+		ldr z24, [x2]
 		add x2,x2,#16*4
-		ldr z13, [x2]
+		ldr z25, [x2]
 		add x2,x2,#16*4
-		ldr z14, [x2]
+		ldr z26, [x2]
 		add x2,x2,#16*4
-		ldr z15, [x2]
+		ldr z27, [x2]
 		// setze C fürs Schreiben zurück
 		sub x2,x2,#(15*16*4)
 
@@ -99,15 +104,15 @@ loop_n:
 			fmla  z6.s, p0/m, z22.s, z17.s
 			fmla  z7.s, p0/m, z23.s, z17.s
 
-			fmla  z8.s, p0/m, z20.s, z18.s
-			fmla  z9.s, p0/m, z21.s, z18.s
-			fmla z10.s, p0/m, z22.s, z18.s
-			fmla z11.s, p0/m, z23.s, z18.s
+			fmla z20.s, p0/m, z20.s, z18.s
+			fmla z21.s, p0/m, z21.s, z18.s
+			fmla z22.s, p0/m, z22.s, z18.s
+			fmla z23.s, p0/m, z23.s, z18.s
 
-			fmla z12.s, p0/m, z20.s, z19.s
-			fmla z13.s, p0/m, z21.s, z19.s
-			fmla z14.s, p0/m, z22.s, z19.s
-			fmla z15.s, p0/m, z23.s, z19.s
+			fmla z24.s, p0/m, z20.s, z19.s
+			fmla z25.s, p0/m, z21.s, z19.s
+			fmla z26.s, p0/m, z22.s, z19.s
+			fmla z27.s, p0/m, z23.s, z19.s
 		
 			sub x3,x3,#1
 			cbnz x3, loop_k
@@ -131,22 +136,22 @@ loop_n:
 		str  z7, [x2]
 		add x2,x2,#16*4
 		
-		str  z8, [x2]
+		str z20, [x2]
 		add x2,x2,#16*4
-		str  z9, [x2]
+		str z21, [x2]
 		add x2,x2,#16*4
-		str z10, [x2]
+		str z22, [x2]
 		add x2,x2,#16*4
-		str z11, [x2]
+		str z23, [x2]
 		add x2,x2,#16*4
 		
-		str z12, [x2]
+		str z24, [x2]
 		add x2,x2,#16*4
-		str z13, [x2]
+		str z25, [x2]
 		add x2,x2,#16*4
-		str z14, [x2]
+		str z26, [x2]
 		add x2,x2,#16*4
-		str z15, [x2]
+		str z27, [x2]
 		add x2,x2,#16*4
 		
 		// A ist komplett bearbeitet wurden, also setze es zurück
@@ -161,6 +166,11 @@ loop_n:
 		cbnz x4, loop_n
 	
 	// restore all used registers
+	// dank Umbenennung nicht mehr notwendig
+	// ldp d14, d15, [sp], #16
+	// ldp d12, d13, [sp], #16
+	// ldp d10, d11, [sp], #16
+	// ldp  d8,  d9, [sp], #16
 	
 	ret
 	
