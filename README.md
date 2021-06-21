@@ -31,7 +31,7 @@ I only implemented what was required for my own kernels. Therefore, this visuali
 - there is no stack
 - you cannot define your own memory
 - you cannot add different memory addresses, because most likely that would be an error
-- there is no preciation for SVE
+- there is no predication for SVE
 - etc.
 
 ## Used libraries
