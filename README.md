@@ -5,9 +5,10 @@ This repository contains my own little VM, which emulates and displays the mecha
 
 ## Links for the running examples
 
-- [16 x 12 x 4 Kernel](https://phychi.com/asm/aarch64/16x12x4.html)
-- [19 x 4 x 4 Kernel](https://phychi.com/asm/aarch64/19x4x4.html)
-- [32 x 32 x 32 Kernel](https://phychi.com/asm/aarch64/32x32x32.html)
+- [ASIMD 16 x 12 x 4 Kernel](https://phychi.com/asm/aarch64/16x12x4.html)
+- [ASIMD 19 x 4 x 4 Kernel](https://phychi.com/asm/aarch64/19x4x4.html)
+- [ASIMD 32 x 32 x 32 Kernel](https://phychi.com/asm/aarch64/32x32x32.html)
+- [SVE with 512 Bits, 64 x 64 x 64 Kernel](https://phychi.com/asm/aarch64/64x64x64.html)
 
 https://user-images.githubusercontent.com/20659579/121016853-e96d1d80-c79c-11eb-924f-75714407fd69.mp4
 
@@ -30,6 +31,7 @@ I only implemented what was required for my own kernels. Therefore, this visuali
 - there is no stack
 - you cannot define your own memory
 - you cannot add different memory addresses, because most likely that would be an error
+- there is no preciation for SVE
 - etc.
 
 ## Used libraries
