@@ -33,9 +33,7 @@ var ptrA = createPointer(A, 'A')
 var ptrB = createPointer(B, 'B')
 var ptrC = createPointer(C, 'C')
 
-var matrices, registers
-var vectorRegisters = new Float32Array(32 * 4)
-var vectorRegisterSources
+var matrices
 
 var maxOffset = Math.max(m,k)*Math.max(k,n)
 var recentUsage = new Int32Array(maxOffset * 3 * 2)

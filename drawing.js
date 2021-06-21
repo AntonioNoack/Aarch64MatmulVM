@@ -35,7 +35,7 @@ function log(msg){
 	var p = document.createElement('p')
 	p.innerText = Array.from(arguments).join(', ')
 	document.body.appendChild(p)
-	console.log(msg)
+	console.log(Array.from(arguments).join(', '))
 }
 
 var dstCells = []
@@ -112,9 +112,17 @@ function onWrite(cell){
 }
 
 function onCalculate2(dst,src0,src1){
-	dstCells.push(vectorRegisterSources[dst])
-	src0Cells.push(vectorRegisterSources[src0])
-	src1Cells.push(vectorRegisterSources[src1])
+	onCalculateI(dst,dstCells);
+	onCalculateI(src0,src0Cells);
+	onCalculateI(src1,src1Cells);
+}
+
+function onCalculateI(dst,dstCells){
+	if(!vectorRegisterSources[dst]){
+		// awkward...
+		// log('Operation without source:', dst, vectorRegisterSources[dst]);
+	}
+	else dstCells.push(vectorRegisterSources[dst])
 }
 
 function onCalculate(dst,src0,src1){

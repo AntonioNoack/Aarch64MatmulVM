@@ -1,0 +1,189 @@
+<html><head>
+	<meta charset="UTF-8"/>
+	<link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="highlightjs/nnfx-light.css">
+</head><body>
+	<div id="delay" class="hidden">0.1</div>
+	<div id="mkn" class="hidden">64,64,64</div>
+	<div id="code" class="hidden">
+	
+	.text
+	.align 4
+	.type   gemm_asm_sve_64_64_64, %function
+	.global gemm_asm_sve_64_64_64
+gemm_asm_sve_64_64_64:
+
+	// geschrieben für SVE2 mit 512 Bits = 16 Floats je Vektor
+	
+	// rette die Register, die wir nutzen, die gerettet werden müssen
+	// wir verwenden nur x0-x4, da müssen wir also nichts retten
+	
+	// setze p0 überall auf 1
+	ptrue p0.s
+	
+	// gehe über alle 4er-Spalten-Gruppen von C
+	mov x4, #16
+loop_n:
+
+		// lade die ersten vier Spalten von C
+		ldr  z0, [x2]
+		add x2,x2,#16*4
+		ldr  z1, [x2]
+		add x2,x2,#16*4
+		ldr  z2, [x2]
+		add x2,x2,#16*4
+		ldr  z3, [x2]
+		add x2,x2,#16*4
+		
+		ldr  z4, [x2]
+		add x2,x2,#16*4
+		ldr  z5, [x2]
+		add x2,x2,#16*4
+		ldr  z6, [x2]
+		add x2,x2,#16*4
+		ldr  z7, [x2]
+		add x2,x2,#16*4
+		
+		ldr  z8, [x2]
+		add x2,x2,#16*4
+		ldr  z9, [x2]
+		add x2,x2,#16*4
+		ldr z10, [x2]
+		add x2,x2,#16*4
+		ldr z11, [x2]
+		add x2,x2,#16*4
+		
+		ldr z12, [x2]
+		add x2,x2,#16*4
+		ldr z13, [x2]
+		add x2,x2,#16*4
+		ldr z14, [x2]
+		add x2,x2,#16*4
+		ldr z15, [x2]
+		// setze C fürs Schreiben zurück
+		sub x2,x2,#(15*16*4)
+
+		// gehe über alle Spalten von A
+		mov x3, #64
+	loop_k:
+
+			// broadcast, speichert den Wert aus B in alle Positionen im Vektor
+			ld1rw {z16.s}, p0/z, [x1]
+			add x1,x1,#64*4
+			ld1rw {z17.s}, p0/z, [x1]
+			add x1,x1,#64*4
+			ld1rw {z18.s}, p0/z, [x1]
+			add x1,x1,#64*4
+			ld1rw {z19.s}, p0/z, [x1]
+			// setze B zurück nach links und eins weiter nach unten
+			sub x1,x1,#(3*64-1)*4
+
+			// lade ganze Spalte von A
+			ldr z20, [x0]
+			add x0,x0,#16*4
+			ldr z21, [x0]
+			add x0,x0,#16*4
+			ldr z22, [x0]
+			add x0,x0,#16*4
+			ldr z23, [x0]
+			add x0,x0,#16*4
+
+			// rechnen
+			fmla  z0.s, p0/m, z20.s, z16.s
+			fmla  z1.s, p0/m, z21.s, z16.s
+			fmla  z2.s, p0/m, z22.s, z16.s
+			fmla  z3.s, p0/m, z23.s, z16.s
+
+			fmla  z4.s, p0/m, z20.s, z17.s
+			fmla  z5.s, p0/m, z21.s, z17.s
+			fmla  z6.s, p0/m, z22.s, z17.s
+			fmla  z7.s, p0/m, z23.s, z17.s
+
+			fmla  z8.s, p0/m, z20.s, z18.s
+			fmla  z9.s, p0/m, z21.s, z18.s
+			fmla z10.s, p0/m, z22.s, z18.s
+			fmla z11.s, p0/m, z23.s, z18.s
+
+			fmla z12.s, p0/m, z20.s, z19.s
+			fmla z13.s, p0/m, z21.s, z19.s
+			fmla z14.s, p0/m, z22.s, z19.s
+			fmla z15.s, p0/m, z23.s, z19.s
+		
+			sub x3,x3,#1
+			cbnz x3, loop_k
+
+		// speichere C
+		str  z0, [x2]
+		add x2,x2,#16*4
+		str  z1, [x2]
+		add x2,x2,#16*4
+		str  z2, [x2]
+		add x2,x2,#16*4
+		str  z3, [x2]
+		add x2,x2,#16*4
+		
+		str  z4, [x2]
+		add x2,x2,#16*4
+		str  z5, [x2]
+		add x2,x2,#16*4
+		str  z6, [x2]
+		add x2,x2,#16*4
+		str  z7, [x2]
+		add x2,x2,#16*4
+		
+		str  z8, [x2]
+		add x2,x2,#16*4
+		str  z9, [x2]
+		add x2,x2,#16*4
+		str z10, [x2]
+		add x2,x2,#16*4
+		str z11, [x2]
+		add x2,x2,#16*4
+		
+		str z12, [x2]
+		add x2,x2,#16*4
+		str z13, [x2]
+		add x2,x2,#16*4
+		str z14, [x2]
+		add x2,x2,#16*4
+		str z15, [x2]
+		add x2,x2,#16*4
+		
+		// A ist komplett bearbeitet wurden, also setze es zurück
+		sub x0,x0,#64*64*4
+		
+		// B wäre jetzt in der nächsten Spalte, aber wir bearbeiten immer vier, also fehlen noch drei Spalten
+		add x1,x1,#64*3*4
+		
+		// C ist schon korrekt
+		
+		sub x4,x4,#1
+		cbnz x4, loop_n
+	
+	// restore all used registers
+	
+	ret
+	
+.size gemm_asm_sve_64_64_64, (. - gemm_asm_sve_64_64_64)
+
+	</div>
+	<h1>AARCH64, 16 x 12 x 4 Matrix-Multiplication</h1>
+	<h2>Running Code:</h2>
+	<button id="cont" onclick="if(redrawDelay>=1e6){ redrawDelay=redrawDelay0; step(); cont.innerText='Stop' } else { redrawDelay=1e9; cont.innerText='Continue' }">Stop</button>
+	<button onclick="redrawDelay=1e9;step();cont.innerText='Continue'">Step</button>
+	<button onclick="restart();redraw()">Restart</button>
+	<button onclick="zoomIn()">Zoom +</button>
+	<button onclick="zoomOut()">Zoom -</button>
+	<button onclick="runFaster()">Speed +</button>
+	<button onclick="runSlower()">Speed -</button>
+	<br>
+	<canvas id="canvas"></canvas>
+	<h2>Source Code:</h2>
+	<!--<textarea id="codeText" rows="100" cols="160"></textarea>-->
+	<pre><code><p id="codeText"></p></code></pre>
+	<script src="highlightjs/highlight.min.js"></script>
+	<script src="virtualMachine.js"></script>
+	<script src="task.js"></script>
+	<script src="drawing.js"></script>
+	<script src="start.js"></script>
+</body></html>

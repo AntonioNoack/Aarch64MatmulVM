@@ -4,6 +4,9 @@
 // only float (32 bit) calculations supported,
 // only float array access implemented
 
+var sveVectorBits = 512
+var sveVectorFloats = sveVectorBits/32
+
 var assembly
 var jumpMap
 
@@ -11,6 +14,10 @@ var lineNumber = 0
 var instrCounter = 0
 
 var hasReturned = false
+
+var registers
+var vectorRegisters = new Float32Array(32 * sveVectorFloats)
+var vectorRegisterSources
 
 function loadAssemblyCode(code){
 	// prepare the assembly by splitting lines, and arguments inside, plus removing comments
@@ -99,30 +106,32 @@ function add(src0,src1){
 	} else return src0 + src1
 }
 
-function fmla(instruction, vectorRegisters){
+function fmla(instruction){
 	var dst = instruction[1]
 	switch(dst[0]){
-		case 'v': fmlaSIMD(instruction, vectorRegisters); break;
 		case 's': fmlaSingle(instruction, vectorRegisters); break;
+		case 'v': fmlaSIMD(instruction, vectorRegisters); break;
+		case 'z': fmlaSVE(instruction, vectorRegisters); break;
 		default: throw dst;
 	}
 }
 
 function getVectorRegister(name){
-	if(name.endsWith(']')) return name.substr(1,name.indexOf('.'))*4 + name[name.length-2]*1
-	return name.substr(1)*4
+	if(name.endsWith(']')) return name.substr(1,name.indexOf('.'))*sveVectorFloats + name[name.length-2]*1
+	if(name.endsWith('s')) return name.substr(1,name.indexOf('.'))*sveVectorFloats
+	return name.substr(1)*sveVectorFloats
 }
 
-function fmlaSingle(instruction, vectorRegisters){
-	// fmla s7,    s22,    v19.s[0]
+function fmlaSingle(instruction){
+	// fmla s7, s22, v19.s[0]
 	var dst  = getVectorRegister(instruction[1])
 	var src0 = getVectorRegister(instruction[2])
 	var src1 = getVectorRegister(instruction[3])
-	vectorRegisters[dst] +=vectorRegisters[src0] * vectorRegisters[src1]
+	vectorRegisters[dst] += vectorRegisters[src0] * vectorRegisters[src1]
 	onCalculate2(dst, src0, src1)
 }
 
-function fmlaSIMD(instruction, vectorRegisters){
+function fmlaSIMD(instruction){
 	var dst = instruction[1]
 	var dstType = dst.split('.')[1]
 	var baseCount
@@ -133,14 +142,14 @@ function fmlaSIMD(instruction, vectorRegisters){
 		case '4s': baseCount = 4; break;
 		default: throw 'Unknown type '+dstType;
 	}
-	dst = dst.substr(1).split('.')[0]*4
+	dst = getVectorRegister(dst)
 	var src0 = instruction[2]
 	if(src0[0] != 'v' || !src0.endsWith(dstType)) throw src0;
-	src0 = src0.substr(1).split('.')[0]*4
+	src0 = getVectorRegister(src0)
 	var src1 = instruction[3]
 	if(src1[0] != 'v' || src1.indexOf('s') < 1) throw src1;
 	src1 = src1.substr(1).split('.')
-	var src1i = src1[0]*4
+	var src1i = src1[0]*sveVectorFloats
 	var src1c = src1[1]
 	switch(src1c){
 		case 's[0]':
@@ -151,8 +160,8 @@ function fmlaSIMD(instruction, vectorRegisters){
 			var s0 = vectorRegisters[src1i];
 			for(var i=0;i<baseCount;i++){
 				var a0 = vectorRegisters[src0+i]
-				// var d0 = vectorRegisters[dst+i]
-				// console.log(dst+i, src0+i, src1i, d0+' += '+a0+' * '+s0)
+				var d0 = vectorRegisters[dst+i]
+				// console.log(dst+i, src0+i, src1i, d0+' += '+a0+' * '+s0, vectorRegisterSources[dst+i], vectorRegisterSources[src0+i], vectorRegisterSources[src1i])
 				vectorRegisters[dst+i] += a0 * s0
 				var result = vectorRegisters[dst+i]
 				if(Number.isNaN(result) || result == undefined) throw result
@@ -162,9 +171,9 @@ function fmlaSIMD(instruction, vectorRegisters){
 		case '4s':
 			for(var i=0;i<4;i++){
 				var s0 = vectorRegisters[src1i+i];
-				var a0 = vectorRegisters[src0+i]
-				// var d0 = vectorRegisters[dst+i]
-				// console.log(dst+i, src0+i, src1i, d0+' += '+a0+' * '+s0)
+				var a0 = vectorRegisters[src0+i];
+				var d0 = vectorRegisters[dst+i]
+				// console.log(dst+i, src0+i, src1i, d0+' += '+a0+' * '+s0, vectorRegisterSources[dst+i], vectorRegisterSources[src0+i], vectorRegisterSources[src1i+i])
 				vectorRegisters[dst+i] += a0 * s0
 				var result = vectorRegisters[dst+i]
 				if(Number.isNaN(result) || result == undefined) throw result
@@ -172,57 +181,75 @@ function fmlaSIMD(instruction, vectorRegisters){
 			}
 			break;
 		default:
-		throw src1;
+			throw src1;
 	}
 }
 
-function ld1(instruction, registers, vectorRegisters){
+function fmlaSVE(instruction){
+	
+	// fmla z0.s, p0/m, z20.s, z16.s
+	// todo: beachte das Prädikatregister
+	var predicateRegister = instruction[2]
+	
+	var dst = getVectorRegister(instruction[1])
+	var src0 = getVectorRegister(instruction[3])
+	var src1 = getVectorRegister(instruction[4])
+	
+	// console.log(instruction[1], dst)
+	
+	for(var i=0;i<sveVectorFloats;i++){
+		// console.log(vectorRegisters[dst], vectorRegisters[src0], vectorRegisters[src1], 'from', src1)
+		vectorRegisters[dst] += vectorRegisters[src0] * vectorRegisters[src1]
+		onCalculate2(dst, src0, src1)
+		dst++;src0++;src1++
+	}
+	
+}
+
+function ld1(instruction){
+	
 	var dst = instruction[1]
 	if(dst[0] != 'v' || !dst.endsWith('.4s')) throw dst;
-	dst = dst.substr(1).split('.')[0]*4
-	switch(instruction.length){
-		case 3:
-			var src = instruction[2]
-			if(src[0] != '[' || src[1] != 'x') throw src;
-			src = src.substr(2).split(']')[0]*1;
-			src = registers[src]
-			for(var i=0;i<4;i++) loadFloat(dst+i, add(src, 4*i), vectorRegisters, vectorRegisterSources)
-			break;
-		case 6:
-			var src = instruction[5]
-			if(src[0] != '[' || src[1] != 'x') throw src;
-			src = src.substr(2).split(']')[0]*1;
-			src = registers[src]
-			for(var i=0;i<16;i++) loadFloat(dst+i, add(src, 4*i), vectorRegisters, vectorRegisterSources)
-			break;
-		default: throw instruction
+	dst = getVectorRegister(dst)
+	
+	// [x1]
+	var src = instruction[instruction.length-1]
+	if(src[0] != '[' || src[1] != 'x') throw src;
+	src = src.substr(2).split(']')[0]*1
+	src = registers[src]
+	
+	var amountOfValues = (instruction.length-2)
+	// console.log('loading', amountOfValues, 'from', src, 'into', dst)
+	for(var i=0;i<amountOfValues;i++){
+		for(var j=0;j<4;j++){
+			loadFloat(dst+i*sveVectorFloats+j, add(src, (i*4 + j)*4))
+		}
 	}
+	
 }
 
-function st1(instruction, registers, vectorRegisters){
+function st1(instruction){
+	
 	var dst = instruction[1]
 	if(dst[0] != 'v' || !dst.endsWith('.4s')) throw dst;
-	dst = dst.substr(1).split('.')[0]*4
-	switch(instruction.length){
-		case 3:
-			var src = instruction[2]
-			if(src[0] != '[' || src[1] != 'x') throw src;
-			src = src.substr(2).split(']')[0]*1;
-			src = registers[src]
-			for(var i=0;i<4;i++) storeFloat(dst+i, add(src,4*i), vectorRegisters)
-			break;
-		case 6:
-			var src = instruction[5]
-			if(src[0] != '[' || src[1] != 'x') throw src;
-			src = src.substr(2).split(']')[0]*1;
-			src = registers[src]
-			for(var i=0;i<4*4;i++) storeFloat(dst+i, add(src,4*i), vectorRegisters)
-			break;
-		default: throw instruction
+	dst = getVectorRegister(dst)
+	
+	// [x1]
+	var src = instruction[instruction.length-1]
+	if(src[0] != '[' || src[1] != 'x') throw src;
+	src = src.substr(2).split(']')[0]*1
+	src = registers[src]
+	
+	var amountOfValues = (instruction.length-2)
+	for(var i=0;i<amountOfValues;i++){
+		for(var j=0;j<4;j++){
+			storeFloat(dst+i*sveVectorFloats+j, add(src, (i*4 + j)*4))
+		}
 	}
+	
 }
 
-function addI(instruction, registers){
+function addI(instruction){
 	if(instruction.length != 4) throw instruction;
 	var dst = getRegister(instruction[1])
 	var src0 = registers[getRegister(instruction[2])]
@@ -231,7 +258,7 @@ function addI(instruction, registers){
 	// console.log('added', dst, src0, src1)
 }
 
-function subI(instruction, registers){
+function subI(instruction){
 	if(instruction.length != 4) throw instruction;
 	var dst = getRegister(instruction[1])
 	var src0 = registers[getRegister(instruction[2])]
@@ -268,7 +295,7 @@ function parseLoadStoreInfo(instruction){
 	// ldr s9 [x2, #5*3]!
 	var dst = instruction[1]
 	var dstType = dst[0]
-	var dstIndex = dst.substr(1)*1
+	var dstIndex = dst.substr(1).split('.')[0]*1
 	var src0 = instruction[2]
 	var src1 = instruction[3]
 	return parseLoadStoreInfo2(dstType, dstIndex, -1, src0, src1)
@@ -303,20 +330,21 @@ function parseLoadStoreInfo2(dstType, dstIndex0, dstIndex1, src0, src1){
 	}
 }
 
-function loadFloat(index, address, vectorRegisters, vectorRegisterSources){
-	index = index & (32*4-1)
+function loadFloat(index, address){
+	index = index % (32*sveVectorFloats)
 	vectorRegisters[index] = getArrayEntry(address)
-	vectorRegisterSources[index] = address				
+	// if(!vectorRegisterSources[index]) console.log('setting', index, 'to', address)
+	vectorRegisterSources[index] = address	
 	onRead(address)
 }
 
-function storeFloat(index, address, vectorRegisters, vectorRegisterSources){
-	index = index & (32*4-1)
+function storeFloat(index, address){
+	index = index % (32*sveVectorFloats)
 	setArrayEntry(vectorRegisters[index], address)		
 	onWrite(address)
 }
 
-function ldrStr(instruction, registers, isPairInstruction, mainOperation){
+function ldrStr(instruction, isPairInstruction, mainOperation){
 	
 	var info = isPairInstruction ? 
 		parseLoadStoreInfoPair(instruction) :
@@ -332,20 +360,20 @@ function ldrStr(instruction, registers, isPairInstruction, mainOperation){
 
 }
 
-function ldr(instruction, registers, vectorRegisters, vectorRegisterSources){
-	ldrStr(instruction, registers, false, (src, info) => {
+function ldr(instruction){
+	ldrStr(instruction, false, (src, info) => {
 		var dx1 = info.dstIndex0
-		var dx4 = dx1 * 4
+		var dx4 = dx1 * sveVectorFloats
 		switch(info.dstType){
 			case 'q': // 4 float values
-				loadFloat(dx4+0, src,  vectorRegisters, vectorRegisterSources); src1 = add(src,  4)
-				loadFloat(dx4+1, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				loadFloat(dx4+2, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				loadFloat(dx4+3, src1, vectorRegisters, vectorRegisterSources)
+				loadFloat(dx4+0, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dx4+1, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dx4+2, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dx4+3, src, vectorRegisters, vectorRegisterSources)
 				break;
 			case 'd': // 2 float values
-				loadFloat(dx4+0, src,  vectorRegisters, vectorRegisterSources); src1 = add(src, 4)
-				loadFloat(dx4+1, src1, vectorRegisters, vectorRegisterSources)
+				loadFloat(dx4+0, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dx4+1, src, vectorRegisters, vectorRegisterSources)
 				break;
 			case 's': // 1 float value
 				loadFloat(dx4, src, vectorRegisters, vectorRegisterSources)
@@ -356,25 +384,51 @@ function ldr(instruction, registers, vectorRegisters, vectorRegisterSources){
 			case 'w': // 64 bit value
 				registers[dx1] = getArrayEntry(src, 8)
 				break;
+			case 'z': // sve
+				for(var i=0;i<sveVectorFloats;i++){
+					loadFloat(dx4+i, src, vectorRegisters, vectorRegisterSources)
+					src = add(src, 4)
+				}
+				break;
 			default: throw info.dstType;
 		}
 	})
 }
 
-function str(instruction, registers, vectorRegisters, vectorRegisterSources){
-	ldrStr(instruction, registers, false, (src, info) => {
+
+function ld1rw(instruction){
+	ldrStr(instruction, false, (src, info) => {
 		var dx1 = info.dstIndex0
-		var dx4 = dx1 * 4
+		var dx4 = dx1 * sveVectorFloats
+		// console.log(info)
+		switch(info.dstType){
+			case 'z': // sve
+				// todo: beachte das Prädikatregister
+				var predicateRegister = instruction[0]
+				for(var i=0;i<sveVectorFloats;i++){
+					loadFloat(dx4+i, src, vectorRegisters, vectorRegisterSources)
+				}
+				break;
+			default: throw info.dstType;
+		}
+	})
+}
+
+
+function str(instruction){
+	ldrStr(instruction, false, (src, info) => {
+		var dx1 = info.dstIndex0
+		var dx4 = dx1 * sveVectorFloats
 		switch(info.dstType){
 			case 'q': // 4 float values
-				storeFloat(dx4+0, src,  vectorRegisters, vectorRegisterSources); src1 = add(src,  4)
-				storeFloat(dx4+1, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				storeFloat(dx4+2, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				storeFloat(dx4+3, src1, vectorRegisters, vectorRegisterSources)
+				storeFloat(dx4+0, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				storeFloat(dx4+1, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				storeFloat(dx4+2, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				storeFloat(dx4+3, src, vectorRegisters, vectorRegisterSources)
 				break;
 			case 'd': // 2 float values
-				storeFloat(dx4+0, src,  vectorRegisters); src1 = add(src, 4)
-				storeFloat(dx4+1, src1, vectorRegisters)
+				storeFloat(dx4+0, src, vectorRegisters); src = add(src, 4)
+				storeFloat(dx4+1, src, vectorRegisters)
 				break;
 			case 's': // 1 float value
 				storeFloat(dx4, src, vectorRegisters)
@@ -385,85 +439,91 @@ function str(instruction, registers, vectorRegisters, vectorRegisterSources){
 			case 'w': // 64 bit value
 				setArrayEntry(registers[dx1], src, 8)
 				break;
-			default: throw info.dstType;
-		}
-	})
-}
-
-function ldp(instruction, registers, vectorRegisters, vectorRegisterSources){
-	ldrStr(instruction, registers, true, (src, info) => {
-		var dx1 = info.dstIndex0
-		var dx4 = dx1 * 4
-		var dy1 = info.dstIndex1
-		var dy4 = dy1 * 4
-		switch(info.dstType){
-			case 'q': // 2x 4 float values
-				loadFloat(dx4+0, src,  vectorRegisters, vectorRegisterSources); src1 = add(src,  4)
-				loadFloat(dx4+1, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				loadFloat(dx4+2, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				loadFloat(dx4+3, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				loadFloat(dy4+0, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				loadFloat(dy4+1, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				loadFloat(dy4+2, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				loadFloat(dy4+3, src1, vectorRegisters, vectorRegisterSources)
-				break;
-			case 'd': // 2x 2 float values
-				loadFloat(dx4+0, src,  vectorRegisters, vectorRegisterSources); src1 = add(src, 4)
-				loadFloat(dx4+1, src1, vectorRegisters, vectorRegisterSources); src1 = add(src, 4)
-				loadFloat(dy4+0, src1, vectorRegisters, vectorRegisterSources); src1 = add(src, 4)
-				loadFloat(dy4+1, src1, vectorRegisters, vectorRegisterSources)
-				break;
-			case 's': // 2x 1 float value
-				loadFloat(dx4, src,        vectorRegisters, vectorRegisterSources)
-				loadFloat(dy4, add(src,4), vectorRegisters, vectorRegisterSources)
-				break;
-			case 'x': // 2x 32 bit value
-				registers[dx1] = getArrayEntry(src, 4)
-				registers[dy1] = getArrayEntry(add(src,4), 4)
-				break;
-			case 'w': // 2x 64 bit value
-				registers[dx1] = getArrayEntry(src, 8)
-				registers[dy1] = getArrayEntry(add(src,8), 8)
+			case 'z': // sve
+				for(var i=0;i<sveVectorFloats;i++){
+					storeFloat(dx4+i, src, vectorRegisters, vectorRegisterSources)
+					src = add(src, 4)
+				}
 				break;
 			default: throw info.dstType;
 		}
 	})
 }
 
-function stp(instruction, registers, vectorRegisters, vectorRegisterSources){
-	ldrStr(instruction, registers, true, (src, info) => {
+function ldp(instruction){
+	ldrStr(instruction, true, (src, info) => {
 		var dx1 = info.dstIndex0
-		var dx4 = dx1 * 4
+		var dx4 = dx1 * sveVectorFloats
 		var dy1 = info.dstIndex1
-		var dy4 = dy1 * 4
+		var dy4 = dy1 * sveVectorFloats
 		switch(info.dstType){
 			case 'q': // 2x 4 float values
-				storeFloat(dx4+0, src,  vectorRegisters, vectorRegisterSources); src1 = add(src,  4)
-				storeFloat(dx4+1, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				storeFloat(dx4+2, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				storeFloat(dx4+3, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				storeFloat(dy4+0, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				storeFloat(dy4+1, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				storeFloat(dy4+2, src1, vectorRegisters, vectorRegisterSources); src1 = add(src1, 4)
-				storeFloat(dy4+3, src1, vectorRegisters, vectorRegisterSources)
+				loadFloat(dx4+0, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dx4+1, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dx4+2, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dx4+3, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dy4+0, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dy4+1, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dy4+2, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dy4+3, src, vectorRegisters, vectorRegisterSources)
 				break;
 			case 'd': // 2x 2 float values
-				storeFloat(dx4+0, src,  vectorRegisters); src1 = add(src, 4)
-				storeFloat(dx4+1, src1, vectorRegisters); src1 = add(src, 4)
-				storeFloat(dy4+0, src1, vectorRegisters); src1 = add(src, 4)
-				storeFloat(dy4+1, src1, vectorRegisters)
+				loadFloat(dx4+0, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dx4+1, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dy4+0, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dy4+1, src, vectorRegisters, vectorRegisterSources)
 				break;
 			case 's': // 2x 1 float value
-				storeFloat(dx4, src, vectorRegisters)
-				storeFloat(dy4, add(src,4), vectorRegisters)
+				loadFloat(dx4, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				loadFloat(dy4, src, vectorRegisters, vectorRegisterSources)
 				break;
 			case 'x': // 2x 32 bit value
-				setArrayEntry(registers[dx1], src, 4)
-				setArrayEntry(registers[dy1], add(src,4), 4)
+				registers[dx1] = getArrayEntry(src, 4); src = add(src, 4)
+				registers[dy1] = getArrayEntry(src, 4)
 				break;
 			case 'w': // 2x 64 bit value
-				setArrayEntry(registers[dx1], src, 8)
-				setArrayEntry(registers[dy1], add(src,8), 8)
+				registers[dx1] = getArrayEntry(src, 8); src = add(src, 8)
+				registers[dy1] = getArrayEntry(src, 8)
+				break;
+			default: throw info.dstType;
+		}
+	})
+}
+
+function stp(instruction){
+	ldrStr(instruction, true, (src, info) => {
+		var dx1 = info.dstIndex0
+		var dx4 = dx1 * sveVectorFloats
+		var dy1 = info.dstIndex1
+		var dy4 = dy1 * sveVectorFloats
+		switch(info.dstType){
+			case 'q': // 2x 4 float values
+				storeFloat(dx4+0, src, vectorRegisters, vectorRegisterSources); src = add(src,  4)
+				storeFloat(dx4+1, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				storeFloat(dx4+2, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				storeFloat(dx4+3, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				storeFloat(dy4+0, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				storeFloat(dy4+1, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				storeFloat(dy4+2, src, vectorRegisters, vectorRegisterSources); src = add(src, 4)
+				storeFloat(dy4+3, src, vectorRegisters, vectorRegisterSources)
+				break;
+			case 'd': // 2x 2 float values
+				storeFloat(dx4+0, src, vectorRegisters); src = add(src, 4)
+				storeFloat(dx4+1, src, vectorRegisters); src = add(src, 4)
+				storeFloat(dy4+0, src, vectorRegisters); src = add(src, 4)
+				storeFloat(dy4+1, src, vectorRegisters)
+				break;
+			case 's': // 2x 1 float value
+				storeFloat(dx4, src, vectorRegisters); src = add(src, 4)
+				storeFloat(dy4, src, vectorRegisters)
+				break;
+			case 'x': // 2x 32 bit value
+				setArrayEntry(registers[dx1], src, 4); src = add(src, 4)
+				setArrayEntry(registers[dy1], src, 4)
+				break;
+			case 'w': // 2x 64 bit value
+				setArrayEntry(registers[dx1], src, 8); src = add(src, 8)
+				setArrayEntry(registers[dy1], src, 8)
 				break;
 			default: throw info.dstType;
 		}
@@ -480,21 +540,21 @@ function executeInstruction(instructionType, instruction){
 			registers[dst] = getValue(instruction[2], registers)
 			break;
 		
-		case 'ldr': ldr(instruction, registers, vectorRegisters, vectorRegisterSources); break;
-		case 'str': str(instruction, registers, vectorRegisters, vectorRegisterSources); break;
+		case 'ldr': ldr(instruction); break;
+		case 'str': str(instruction); break;
 		
-		case 'ldp': ldp(instruction, registers, vectorRegisters, vectorRegisterSources); break;
-		case 'stp': stp(instruction, registers, vectorRegisters, vectorRegisterSources); break;
+		case 'ldp': ldp(instruction); break;
+		case 'stp': stp(instruction); break;
 		
-		case 'ld1': ld1(instruction, registers, vectorRegisters, vectorRegisterSources); break;
-		case 'st1': st1(instruction, registers, vectorRegisters, vectorRegisterSources); break;
+		case 'ld1': ld1(instruction); break;
+		case 'st1': st1(instruction); break;
 		
 		// integer calculations
 		case 'add':
-			addI(instruction, registers)
+			addI(instruction)
 			break;
 		case 'sub':
-			subI(instruction, registers)
+			subI(instruction)
 			break;
 		case 'neg':
 			if(instruction.length != 3) throw instruction;
@@ -505,8 +565,7 @@ function executeInstruction(instructionType, instruction){
 			break;
 			
 		// floating point calculations
-		case 'fmla': fmla(instruction, vectorRegisters); break;
-		
+		case 'fmla': fmla(instruction); break;
 		// branching
 		case 'cbnz':
 			if(instruction.length != 3) throw instruction;
@@ -517,7 +576,7 @@ function executeInstruction(instructionType, instruction){
 				var label = instruction[2]
 				var found = jumpMap[label]
 				if(!found) throw 'label not found: '+label
-				log('jump to line', label, src)
+				// log('jump to line', label, src)
 				lineNumber = found
 			}
 			break;
@@ -527,9 +586,25 @@ function executeInstruction(instructionType, instruction){
 			stop(true)
 			return 1
 		
+		// sve
+		case 'ptrue':
+			
+			// todo: setze das Prädikatregister
+			// ptrue p0.s
+			
+			break;
+		
+		case 'ld1rw':
+		
+			// lade den Wert und dupliziere ihn überall in den SVE-Vektor
+			// ld1rw {z16.s}, p0/z, [x1]
+			ld1rw([instruction[2], instruction[1], instruction[3]], registers, vectorRegisters, vectorRegisterSources);
+			
+			break;
+		
 		// unknown instruction
 		default:
-			log('Unknown instruction', instruction)
+			log('Unknown instruction ' + instruction)
 			log(registers)
 			stop(false)
 			return 1;
