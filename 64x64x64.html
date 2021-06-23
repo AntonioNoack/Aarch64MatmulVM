@@ -49,15 +49,6 @@ loop_n:
 		ldr  z7, [x2]
 		add x2,x2,#16*4
 		
-		ldr z20, [x2]
-		add x2,x2,#16*4
-		ldr z21, [x2]
-		add x2,x2,#16*4
-		ldr z22, [x2]
-		add x2,x2,#16*4
-		ldr z23, [x2]
-		add x2,x2,#16*4
-		
 		ldr z24, [x2]
 		add x2,x2,#16*4
 		ldr z25, [x2]
@@ -65,6 +56,15 @@ loop_n:
 		ldr z26, [x2]
 		add x2,x2,#16*4
 		ldr z27, [x2]
+		add x2,x2,#16*4
+		
+		ldr z28, [x2]
+		add x2,x2,#16*4
+		ldr z29, [x2]
+		add x2,x2,#16*4
+		ldr z30, [x2]
+		add x2,x2,#16*4
+		ldr z31, [x2]
 		// setze C fürs Schreiben zurück
 		sub x2,x2,#(15*16*4)
 
@@ -104,15 +104,15 @@ loop_n:
 			fmla  z6.s, p0/m, z22.s, z17.s
 			fmla  z7.s, p0/m, z23.s, z17.s
 
-			fmla z20.s, p0/m, z20.s, z18.s
-			fmla z21.s, p0/m, z21.s, z18.s
-			fmla z22.s, p0/m, z22.s, z18.s
-			fmla z23.s, p0/m, z23.s, z18.s
+			fmla z24.s, p0/m, z20.s, z18.s
+			fmla z25.s, p0/m, z21.s, z18.s
+			fmla z26.s, p0/m, z22.s, z18.s
+			fmla z27.s, p0/m, z23.s, z18.s
 
-			fmla z24.s, p0/m, z20.s, z19.s
-			fmla z25.s, p0/m, z21.s, z19.s
-			fmla z26.s, p0/m, z22.s, z19.s
-			fmla z27.s, p0/m, z23.s, z19.s
+			fmla z28.s, p0/m, z20.s, z19.s
+			fmla z29.s, p0/m, z21.s, z19.s
+			fmla z30.s, p0/m, z22.s, z19.s
+			fmla z31.s, p0/m, z23.s, z19.s
 		
 			sub x3,x3,#1
 			cbnz x3, loop_k
@@ -136,15 +136,6 @@ loop_n:
 		str  z7, [x2]
 		add x2,x2,#16*4
 		
-		str z20, [x2]
-		add x2,x2,#16*4
-		str z21, [x2]
-		add x2,x2,#16*4
-		str z22, [x2]
-		add x2,x2,#16*4
-		str z23, [x2]
-		add x2,x2,#16*4
-		
 		str z24, [x2]
 		add x2,x2,#16*4
 		str z25, [x2]
@@ -152,6 +143,15 @@ loop_n:
 		str z26, [x2]
 		add x2,x2,#16*4
 		str z27, [x2]
+		add x2,x2,#16*4
+		
+		str z28, [x2]
+		add x2,x2,#16*4
+		str z29, [x2]
+		add x2,x2,#16*4
+		str z30, [x2]
+		add x2,x2,#16*4
+		str z31, [x2]
 		add x2,x2,#16*4
 		
 		// A ist komplett bearbeitet wurden, also setze es zurück
